@@ -1,157 +1,132 @@
-``
-╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║        ██████╗ ███████╗ ██████╗███████╗██╗   ██╗███████╗    ║
-║        ██╔══██╗██╔════╝██╔════╝██╔════╝╚██╗ ██╔╝██╔════╝    ║
-║        ██████╔╝█████╗  ██║     ███████╗ ╚████╔╝ ███████╗    ║
-║        ██╔══██╗██╔══╝  ██║     ╚════██║  ╚██╔╝  ╚════██║    ║
-║        ██║  ██║███████╗╚██████╗███████║   ██║   ███████║    ║
-║        ╚═╝  ╚═╝╚══════╝ ╚═════╝╚══════╝   ╚═╝   ╚══════╝    ║
-║                                                              ║
-║          two-stage recommender  ·  production architecture   ║
-╚══════════════════════════════════════════════════════════════╝
-```
+<div align="center">
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=28&pause=1000&color=7C6AFF&center=true&vCenter=true&width=600&lines=Two-Stage+Recommender+System;Production+ML+Architecture" alt="Typing SVG" />
+<br/>
+**The recommendation pipeline used by Amazon, YouTube, and Meta — built from scratch.**  
+Candidate generation with ALS + FAISS, re-ranked with LightGBM LambdaMART. Served via FastAPI with a live React dashboard.
  
-[![Python](https://img.shields.io/badge/python-3.10+-6e56cf?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-00c896?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![React](https://img.shields.io/badge/React-18-61dafb?style=flat-square&logo=react&logoColor=black)](https://react.dev)
-[![LightGBM](https://img.shields.io/badge/LightGBM-LambdaMART-f7931e?style=flat-square)](https://lightgbm.readthedocs.io)
-[![FAISS](https://img.shields.io/badge/FAISS-ANN_Search-1877f2?style=flat-square)](https://faiss.ai)
+<br/>
+[![Python](https://img.shields.io/badge/Python_3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React_18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev)
+[![LightGBM](https://img.shields.io/badge/LightGBM-F7931E?style=for-the-badge)](https://lightgbm.readthedocs.io)
+[![FAISS](https://img.shields.io/badge/FAISS-1877F2?style=for-the-badge)](https://faiss.ai)
  
 </div>
 ---
  
-## the problem
+## Overview
  
-Every major recommender system (YouTube, Amazon, Netflix) runs the same architecture. Nowhere online shows you the complete, wired-up version. This is it.
- 
-```
-user_id ──►  500,000 items  →  200 candidates  →  10 results  ──►  response
-                  ↑                   ↑                 ↑
-           your catalog         Stage 1              Stage 2
-                              ALS + FAISS          LightGBM
-                              ~2ms lookup          ~12ms rank
-```
- 
-You can't run a heavy model over millions of items in real time. So you don't. You retrieve cheaply, then rank precisely. That's the whole insight.
- 
----
- 
-## the pipeline
+Most recommender tutorials train one model and call it done. Real systems don't work that way — you can't run a heavy ranking model over millions of items at request time. This project implements the actual production pattern: a two-stage pipeline that **retrieves cheaply, then ranks precisely**.
  
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  STAGE 1 — CANDIDATE GENERATION                                 │
-│                                                                 │
-│  algorithm    Alternating Least Squares (ALS)                   │
-│  loss         implicit confidence  c = 1 + α·r                 │
-│  output       64-dimensional user + item embeddings             │
-│  retrieval    FAISS IndexFlatIP  (inner product ANN)            │
-│  result       top-200 candidates per user                       │
-│  eval         Recall@200                                        │
-└────────────────────────────┬────────────────────────────────────┘
-                             │ 200 candidates
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  STAGE 2 — RANKING                                              │
-│                                                                 │
-│  algorithm    LightGBM with LambdaMART objective                │
-│  loss         listwise NDCG optimization                        │
-│  features     stage1_score · popularity · avg_rating ·          │
-│               user_history · embedding norms · recency          │
-│  split        temporal  (train on past, eval on future)         │
-│  eval         NDCG@10 · MAP                                     │
-└────────────────────────────┬────────────────────────────────────┘
-                             │ top-10 ranked
-                             ▼
-                    POST /recommend
+500,000 items  ──►  Stage 1: ALS + FAISS  ──►  200 candidates  ──►  Stage 2: LightGBM  ──►  10 results
+                      ~2ms · cosine ANN                                ~12ms · LambdaMART
 ```
  
 ---
  
-## quick start
+## Features
+ 
+- **Stage 1 — Candidate Generation** · Alternating Least Squares on implicit feedback, embedded into a FAISS index for sub-5ms approximate nearest-neighbor retrieval
+- **Stage 2 — Ranking** · LightGBM with LambdaMART listwise loss, trained on rich features: embedding similarity, item metadata, user history, and recency
+- **Temporal evaluation** · Train/test split by timestamp, not random — mirrors real deployment and avoids future leakage
+- **Cold start handling** · Popularity-based fallback for new users with no embedding
+- **Live dashboard** · React frontend showing the pipeline trace, per-stage latency, feature importance, and offline metrics
+- **REST API** · `POST /recommend` returns ranked results with full pipeline introspection
+---
+ 
+## Quickstart
  
 ```bash
-# clone & enter
-git clone https://github.com/you/recsys && cd recsys
+# Clone and enter
+git clone https://github.com/you/recsys && cd recommender-system
  
-# one-time setup (creates venv, installs deps, trains both models)
+# One-command setup: creates venv, installs deps, generates data, trains both models
 chmod +x setup.sh && ./setup.sh
 ```
  
-Then open two terminals:
+Open two terminals:
  
 ```bash
-# terminal 1 — api
-cd backend && source .venv/bin/activate
+# Terminal 1 — API server
+cd backend
+source .venv/bin/activate
 uvicorn main:app --reload
-# → http://localhost:8000/docs
+# Swagger docs → http://localhost:8000/docs
+```
  
-# terminal 2 — ui
-cd frontend && npm start
-# → http://localhost:3000
+```bash
+# Terminal 2 — React dashboard
+cd frontend
+npm start
+# Dashboard → http://localhost:3000
 ```
  
 ---
  
-## manual setup
+## Manual Setup
  
+<details>
+<summary><b>Backend</b></summary>
 ```bash
-# backend
 cd backend
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
  
-# generate 2k users · 500 items · 80k interactions
+# Generate 2,000 users · 500 items · 80,000 interactions
 python generate_data.py
  
-# train stage 1  (ALS + FAISS index)
+# Train Stage 1 (ALS + FAISS)
 python -c "from stage1_candidate_gen import train_and_save; train_and_save()"
  
-# train stage 2  (LightGBM LambdaMART)
+# Train Stage 2 (LightGBM LambdaMART)
 python -c "from stage2_ranker import train_and_save; train_and_save()"
  
-# serve
-uvicorn main:app --reload
+# Start server
+uvicorn main:app --reload --port 8000
 ```
  
+</details>
+<details>
+<summary><b>Frontend</b></summary>
 ```bash
-# frontend
-cd frontend && npm install && npm start
+cd frontend
+npm install
+npm start
 ```
  
+</details>
 ---
  
-## project layout
+## Project Structure
  
 ```
 recommender-system/
-│
 ├── backend/
-│   ├── main.py                  FastAPI server · /recommend · /metrics · /user
-│   ├── generate_data.py         synthetic data generator (MovieLens-style)
-│   ├── stage1_candidate_gen.py  ALS training · FAISS index build · Recall@K eval
-│   ├── stage2_ranker.py         LightGBM LambdaMART · feature engineering · NDCG eval
-│   ├── train.py                 end-to-end training orchestrator
+│   ├── main.py                  # FastAPI app — /recommend, /metrics, /user, /health
+│   ├── generate_data.py         # Synthetic MovieLens-style data generator
+│   ├── stage1_candidate_gen.py  # ALS training + FAISS index + Recall@K eval
+│   ├── stage2_ranker.py         # LightGBM LambdaMART + feature engineering + NDCG eval
+│   ├── train.py                 # End-to-end training orchestrator
 │   └── requirements.txt
 │
 ├── frontend/
-│   └── src/App.js               React dashboard · pipeline trace · metrics · arch view
+│   └── src/App.js               # Dashboard: pipeline trace, metrics, architecture view
 │
-├── data/                        generated .parquet files  (git-ignored)
-├── models/                      trained artifacts  (git-ignored)
-├── setup.sh                     one-command bootstrap
-└── recommender.code-workspace   VS Code multi-root workspace
+├── data/                        # Generated .parquet files  [gitignored]
+├── models/                      # Trained model artifacts   [gitignored]
+├── setup.sh                     # One-command bootstrap
+└── recommender.code-workspace   # VS Code multi-root workspace
 ```
  
 ---
  
-## api
+## API Reference
  
-```http
-POST /recommend
-Content-Type: application/json
+### `POST /recommend`
  
+```json
 {
   "user_id": 42,
   "n_candidates": 200,
@@ -160,98 +135,91 @@ Content-Type: application/json
 ```
  
 ```jsonc
-// response
+// Response
 {
   "user_id": 42,
+  "total_latency_ms": 14.3,
+  "cold_start": false,
   "results": [
     {
       "item_id": 137,
       "title": "Blade Runner 2049",
       "genres": ["Sci-Fi", "Drama"],
       "rank": 1,
-      "stage1_score": 0.8821,   // cosine similarity from ALS embedding
-      "stage2_score": 3.4102    // LambdaMART output
+      "stage1_score": 0.8821,
+      "stage2_score": 3.4102
     }
-    // ...
   ],
   "pipeline": [
     { "name": "Stage 1 — Candidate Generation", "latency_ms": 2.1, "n_items_out": 200 },
-    { "name": "Stage 2 — Neural Ranking",        "latency_ms": 11.4, "n_items_out": 10 }
-  ],
-  "total_latency_ms": 14.3,
-  "cold_start": false
+    { "name": "Stage 2 — Ranking",              "latency_ms": 11.4, "n_items_out": 10 }
+  ]
 }
 ```
  
-Other endpoints:
- 
-| Endpoint | Returns |
+| Endpoint | Description |
 |---|---|
-| `GET /user/{id}` | profile · top genres · interaction history · embedding status |
-| `GET /metrics` | live p50/p95/p99 latency · Recall@200 · NDCG@10 · feature importance |
-| `GET /health` | model load status |
-| `GET /docs` | interactive Swagger UI |
+| `POST /recommend` | Run the full two-stage pipeline for a user |
+| `GET /user/{id}` | User profile, top genres, interaction history |
+| `GET /metrics` | Live latency percentiles + offline eval metrics |
+| `GET /health` | Model and data load status |
+| `GET /docs` | Interactive Swagger UI |
  
 ---
  
-## design decisions
+## Evaluation
  
-**why two stages at all?**  
-A single heavy model over 500k items at request time costs hundreds of milliseconds. Stage 1 is a cheap dot-product lookup (2ms). Stage 2 runs the expensive model on just 200 items (12ms). This is the architecture YouTube described in their 2016 paper and every major company runs variants of today.
+Metrics are reported per-stage so you can debug the funnel independently.
  
-**why LambdaMART over classification?**  
-Framing ranking as binary click/no-click classification ignores the relative order of items. LambdaMART computes gradients directly from NDCG, which is the metric that actually captures whether the best item is ranked first. Using a classification loss and then re-ranking is two steps in the wrong direction.
+| Stage | Metric | What it measures |
+|---|---|---|
+| Stage 1 | **Recall@200** | Does the right item make it into candidates? |
+| Stage 2 | **NDCG@10** | Is the best item near the top of the ranked list? |
+| Stage 2 | **MAP** | Average precision across all users |
+| Live | **p50 / p95 / p99** | End-to-end latency percentiles |
  
-**why temporal splitting?**  
-Random train/test splits allow future interactions to leak into training, producing metrics that won't survive contact with real deployment. Temporal splitting mirrors production: the model only ever sees the past, and is tested on the future.
- 
-**cold start**  
-Users without embeddings (no history, or too recent to appear in training) fall back to popularity-based candidates. Item frequencies follow a power law — the most popular items are the safest bet for a new user. In production you'd combine this with content-based features from onboarding signals.
- 
----
- 
-## evaluation
- 
-The system reports metrics at two levels, separately for each stage:
- 
-```
-Stage 1  ·  Recall@200      "did the right item make it into candidates?"
-Stage 2  ·  NDCG@10         "is the best item near the top of the ranked list?"
-         ·  MAP              "across all users, how good is the average precision?"
- 
-Live     ·  p50 / p95 / p99  latency percentiles across all served requests
-```
- 
-Reporting them separately lets you debug the funnel. If NDCG@10 is low but Recall@200 is high, Stage 2 is the problem. If Recall@200 is low, no amount of ranking improvement will help — the right items aren't even making it to Stage 2.
+> If NDCG@10 is low but Recall@200 is high, Stage 2 is the bottleneck. If Recall@200 is low, no amount of ranking improvement helps.
  
 ---
  
-## extending this
+## Architecture Decisions
  
-| idea | where to touch |
+**Why two stages?**  
+Running a heavy model over 500k items per request costs hundreds of milliseconds. Stage 1 is a cheap embedding lookup and dot-product ANN search (~2ms). Stage 2 applies expensive features to just 200 items (~12ms). The total pipeline is 14ms.
+ 
+**Why LambdaMART over classification?**  
+Binary click/no-click framing ignores relative item order. LambdaMART computes pairwise gradients directly from NDCG — the metric that actually matters for ranking quality.
+ 
+**Why temporal splitting?**  
+Random splits let future interactions leak into training, inflating offline metrics. Temporal splitting mirrors real deployment: train on the past, evaluate on the future.
+ 
+---
+ 
+## Extending This
+ 
+| Idea | Where to look |
 |---|---|
-| Replace ALS with a Two-Tower neural model | `stage1_candidate_gen.py` — swap `AlternatingLeastSquares` for a dual-encoder, keep the FAISS index |
-| Scale ANN to billions of items | swap `faiss.IndexFlatIP` for `faiss.IndexIVFFlat` or ScaNN |
-| Add diversity re-ranking | post-process Stage 2 output with MMR (Maximal Marginal Relevance) |
-| Real dataset | drop-in replace `generate_data.py` with MovieLens 25M or the H&M Kaggle dataset |
-| Better cold start | add content-based features (genres, year, description embeddings) for items without interaction history |
+| Replace ALS with a Two-Tower neural model | `stage1_candidate_gen.py` — keep the FAISS index, swap the embedding source |
+| Scale to billions of items | Replace `IndexFlatIP` with `IndexIVFFlat` or Google ScaNN |
+| Add diversity re-ranking | Post-process Stage 2 with Maximal Marginal Relevance (MMR) |
+| Use a real dataset | Drop-in replace `generate_data.py` with MovieLens 25M or H&M Kaggle |
  
 ---
  
-## stack
+## Tech Stack
  
-| | |
+| Purpose | Library |
 |---|---|
-| Candidate generation | `implicit` — ALS on implicit feedback |
-| ANN retrieval | `faiss-cpu` — IndexFlatIP |
+| Matrix Factorization | `implicit` — ALS on implicit feedback |
+| ANN Search | `faiss-cpu` — IndexFlatIP |
 | Ranking | `lightgbm` — LambdaMART objective |
 | API | `fastapi` + `uvicorn` |
 | Frontend | React 18 + Recharts |
-| Data | `pandas` + `pyarrow` parquet |
+| Data | `pandas` + `pyarrow` |
  
 ---
  
 <div align="center">
-<sub>built to mirror what Amazon, YouTube, and Meta actually ship  ·  not a tutorial, a blueprint</sub>
-</div>
+**Built to mirror what ships in production, not what gets written in tutorials.**
  
+</div>
