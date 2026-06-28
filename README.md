@@ -4,14 +4,7 @@
 **The recommendation pipeline used by Amazon, YouTube, and Meta — built from scratch.**  
 Candidate generation with ALS + FAISS, re-ranked with LightGBM LambdaMART. Served via FastAPI with a live React dashboard.
  
-<br/>
-[![Python](https://img.shields.io/badge/Python_3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![React](https://img.shields.io/badge/React_18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev)
-[![LightGBM](https://img.shields.io/badge/LightGBM-F7931E?style=for-the-badge)](https://lightgbm.readthedocs.io)
-[![FAISS](https://img.shields.io/badge/FAISS-1877F2?style=for-the-badge)](https://faiss.ai)
- 
-</div>
+
 ---
  
 ## Overview
